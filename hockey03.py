@@ -17,22 +17,24 @@ params.maxArea = 12000
 detector = cv2.SimpleBlobDetector_create(params)
 
 # Variables iniciales
-prev_center = (0,0)
-prev_radius = 0
-Ry_p = 40
-Rx_p = 50
-Rx = 50
-Ry = 40
-Ry1 = 39
-Top = 20
-Left = 25
-Bot = 600
-Right = 460
-Blue = (255, 0, 0)
+prev_center = (0,0) # Centro del frame previo
+Ry_p = 40 # Posicion y predecida
+Rx_p = 50 # Posicion x predecida
+Rx = 50 # Posicion x 
+Ry = 40 # Posicion y
+Ry1 = 39 # Posicion y del frame previo
+Top = 20 # Limite superior
+Left = 25 # Limite izquierdo
+Bot = 600 # Limite inferior
+Right = 460 # Limite Derecho
+Blue = (255, 0, 0) 
 Green = (0, 255, 0)
-Radio = 0.2
-Rpm = 0
-V1=0
+Radio = 0.2 # Radio del motor
+Rpm = 0 # RPM para el motor
+V1=0 # Velocidad del frame previo
+Kp1= 0.7 # Ganancia del propocional de posicion
+Kp2 = 1.5 # Ganancia del proporcional de Velocidad
+Ki2 = 0.2 # Ganancia del integrador de velocidad
 
 # Valores del filto de rojos
 redBajo1 = np.array([0, 110, 50], np.uint8)
@@ -79,7 +81,6 @@ while True:
             if Ry_p < Top:
                 Ry_p = 25
             Rp_pos = (int(Rx_p), int(Ry_p))
-            #print(f"proyeccion:{Ry_p}")
             # Proyeccion de la trayectoria
             cv2.line(frame, Rp_pos, center, Blue, 2)
             # Projeccion del robot en x fija
@@ -89,35 +90,30 @@ while True:
             Dp=np.sqrt((Ry_p-y2)**2+(x2-Rx_p)**2) # Distancia puck
             Vp=(np.sqrt((x2-x1)**2+(y2-y1)**2))/0.03 # Velocidad del puck
             Tp=Dp/Vp # Tiempo para la interseccion
-            Kp1= 0.7 # Ganancia del propocional de posicion
             Vta = Ry_e*Kp1/Tp # Velocidad Target
             Va=(Ry-Ry1)/0.03 # Velocidad actual del Robot
             Ve = Vta-Va # Velocidad error del robot
-            Kp2 = 1.5 # Ganancia del proporcional de Velocidad
             Rpm = (Ve*Kp2)*Radio # Rpm para el contolador
-            if Ry_p==x2:
-                IV = 0
-            IntV = IntV+(0.03*V1+0.5*0.03*(Va-V1))
-            IV = (Ve*Kp2) + IntV
+            if Ry==x2: # Si el puck choca con el robot el incremento de velocidad es 0 
+                IV = 0 
+            IntV = IntV+(0.03*V1+0.5*0.03*(Va-V1)) # Integral de la velocidad para el control
+            IV = (Ve*Kp2) + IntV*Ki2 # incremento de velocidad
             Ry = Ry + (IV)*0.03 # Posicion del robot
-            Ry1=Ry
+            # Guardado de la posicion y velocidad para el proximo frame
+            Ry1=Ry 
             V1=Va
-        else:
+        else: # Incremento de velocidad y RPM igual a 0 cuando el puck se aleja
             Rpm = 0
             IntV = 0
-        # Se guardan los valores de centro y radio 
+        # Se guardan los valores de centro
         prev_center = center
-        prev_radius = radius
-    if len(keypoints) == 0:
+    if len(keypoints) == 0: # Incremento de velocidad y RPM igual a 0 cuando no se detecta puck
         Rpm = 0
         IntV = 0
     # Se dibuja el circulo donde se encuentra el robot
     cv2.circle(frame, (int(Rx),int(Ry)), 25, Blue, 2)
-    print(f"proyeccion:{Rpm}")
 # Enseñar frame en la pantalla
     cv2.imshow("Video", frame)
-#Descomentar en caso de querer bajar la velocidad del video
-    #time.sleep(0.1)
 # Cerrar programa al presionar q
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
