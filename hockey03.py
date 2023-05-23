@@ -1,18 +1,20 @@
 # importar librerias
 import cv2
 import numpy as np
+import serial
+import time
 
 # Se abre la camara (1 por ser camara externa)
-video = cv2.VideoCapture(1)
-
-
+video = cv2.VideoCapture(0)
+# inicio de la comunicacion serial
+ser = serial.Serial("COM13", 74880)
 # Se crea una pantalla para visualiazcion
 cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
 
 # Parametros de deteccion del circulo
 params = cv2.SimpleBlobDetector_Params()
 params.filterByArea = True
-params.minArea = 8000
+params.minArea = 2000
 params.maxArea = 12000
 detector = cv2.SimpleBlobDetector_create(params)
 
@@ -29,12 +31,15 @@ Bot = 600 # Limite inferior
 Right = 460 # Limite Derecho
 Blue = (255, 0, 0) 
 Green = (0, 255, 0)
-Radio = 0.2 # Radio del motor
-Rpm = 0 # RPM para el motor
+Radio = 1.7 # Radio del motor
 V1=0 # Velocidad del frame previo
 Kp1= 0.7 # Ganancia del propocional de posicion
 Kp2 = 1.5 # Ganancia del proporcional de Velocidad
 Ki2 = 0.2 # Ganancia del integrador de velocidad
+Ry_e = 0
+Rpm = 0
+Time = 0
+en = 0
 
 # Valores del filto de rojos
 redBajo1 = np.array([0, 110, 50], np.uint8)
@@ -63,6 +68,7 @@ while True:
     cv2.rectangle(frame, (Top,Left), (Bot,Right), Blue, 2)
     # Si se detecta el circulo se dibuja el contorno y se empieza la prediccion
     if len(keypoints) > 0:
+        en = 1
         center = (int(keypoints[0].pt[0]), int(keypoints[0].pt[1]))
         radius = int(keypoints[0].size / 2)
         cv2.circle(frame, center, radius, Green, 2)
@@ -88,30 +94,47 @@ while True:
             # Se inicia el control
             Ry_e = Ry_p - Ry # Error de posicion
             Dp=np.sqrt((Ry_p-y2)**2+(x2-Rx_p)**2) # Distancia puck
-            Vp=(np.sqrt((x2-x1)**2+(y2-y1)**2))/0.03 # Velocidad del puck
+            Vp=(np.sqrt((x2-x1)**2+(y2-y1)**2))/30 # Velocidad del puck
             Tp=Dp/Vp # Tiempo para la interseccion
             Vta = Ry_e*Kp1/Tp # Velocidad Target
-            Va=(Ry-Ry1)/0.03 # Velocidad actual del Robot
+            Va=(Ry-Ry1)/30 # Velocidad actual del Robot
             Ve = Vta-Va # Velocidad error del robot
-            Rpm = (Ve*Kp2)*Radio # Rpm para el contolador
+            IntV = IntV+(30*V1+0.5*30*(Va-V1)) # Integral de la velocidad para el control
+            IV = (Ve*Kp2) + IntV*Ki2 # incremento de velocidad
             if Ry==x2: # Si el puck choca con el robot el incremento de velocidad es 0 
                 IV = 0 
-            IntV = IntV+(0.03*V1+0.5*0.03*(Va-V1)) # Integral de la velocidad para el control
-            IV = (Ve*Kp2) + IntV*Ki2 # incremento de velocidad
-            Ry = Ry + (IV)*0.03 # Posicion del robot
+            Ry = Ry + (IV)*30 # Posicion del robot para simulacion
+            Rpm = (IV)*Radio # Rpm para el contolador
             # Guardado de la posicion y velocidad para el proximo frame
             Ry1=Ry 
             V1=Va
         else: # Incremento de velocidad y RPM igual a 0 cuando el puck se aleja
-            Rpm = 0
+            IV = 0
             IntV = 0
+            en = 0
         # Se guardan los valores de centro
         prev_center = center
     if len(keypoints) == 0: # Incremento de velocidad y RPM igual a 0 cuando no se detecta puck
-        Rpm = 0
+        IV = 0
         IntV = 0
+        Ry_e = 0
+        en = 0
+    if Rpm > 0:
+        Dir = 1
+    else:
+        Dir = 0
+    Time = Ry_e/(IV+0.0000001)
+    if Time < 400:
+        Time = 400
+    if Time > 2500:
+        Time = 2500
     # Se dibuja el circulo donde se encuentra el robot
     cv2.circle(frame, (int(Rx),int(Ry)), 25, Blue, 2)
+    Time = int(Time)
+    ESP32 = str(Dir)+","+str(en)
+    print(f"Time:{ESP32}")
+    ser.write(ESP32.encode('ascii'))
+    time.sleep(1)
 # Enseñar frame en la pantalla
     cv2.imshow("Video", frame)
 # Cerrar programa al presionar q
@@ -122,3 +145,4 @@ while True:
 # Clean up
 video.release()
 cv2.destroyAllWindows()
+ser.close()
