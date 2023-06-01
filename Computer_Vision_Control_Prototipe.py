@@ -54,6 +54,7 @@ redAlto2=np.array([179, 255, 255], np.uint8)
 # Valores de filtro de azules
 BlueBajo = np.array([105, 150, 50], np.uint8)
 BlueAlto = np.array([135, 255, 255], np.uint8)
+
 # Loop para cada frame capturado
 while True:
     # Lee la camara
